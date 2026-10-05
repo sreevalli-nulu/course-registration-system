@@ -1,9 +1,8 @@
 ﻿import enum
 from datetime import datetime
-
 from sqlalchemy import (
     Column, Integer, String, Text, Numeric, ForeignKey, DateTime,
-    Enum as SAEnum, UniqueConstraint, CheckConstraint
+    Enum as SAEnum, UniqueConstraint, CheckConstraint, func, text
 )
 from sqlalchemy.orm import relationship
 
@@ -180,3 +179,24 @@ class AuditLog(Base):
     record_id = Column(Integer, nullable=True)
     details = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+
+
+class EnrollmentHistory(Base):
+    """Row-level history of every enrollment change. Written by a database
+    trigger (see the 'triggers' migration), never by application code, so it
+    records changes even if someone edits the table directly in SQL."""
+    __tablename__ = "enrollment_history"
+
+    id = Column(Integer, primary_key=True)
+    enrollment_id = Column(Integer, nullable=False, index=True)
+    student_id = Column(Integer, nullable=False)
+    section_id = Column(Integer, nullable=False)
+    action = Column(String(10), nullable=False)  # INSERT or UPDATE
+    old_status = Column(String(20), nullable=True)
+    new_status = Column(String(20), nullable=False)
+    old_grade = Column(String(2), nullable=True)
+    new_grade = Column(String(2), nullable=True)
+    changed_at = Column(DateTime, server_default=func.now(), nullable=False)
+    changed_by = Column(String(100), server_default=text("current_user"), nullable=False)
