@@ -1,7 +1,7 @@
 ﻿from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, courses, sections, enrollments, me
+from app.routers import auth, courses, sections, enrollments, me, grades, admin
 
 app = FastAPI(
     title="Course Registration System API",
@@ -23,6 +23,8 @@ app.include_router(courses.router)
 app.include_router(sections.router)
 app.include_router(enrollments.router)
 app.include_router(me.router)
+app.include_router(grades.router)
+app.include_router(admin.router)
 
 
 @app.get("/health")

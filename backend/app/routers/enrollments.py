@@ -1,5 +1,5 @@
 ﻿from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -39,12 +39,81 @@ def _student_completed_course_ids(db: Session, student_id: int) -> set:
         .filter(
             Enrollment.student_id == student_id,
             Enrollment.status == EnrollmentStatus.completed,
+            or_(Enrollment.grade.is_(None), Enrollment.grade != "F"),
         )
         .all()
     )
     return {r[0] for r in rows}
 
+def promote_from_waitlist(db: Session, section: Section) -> list:
+    """Move waitlisted students into open seats, longest-waiting first.
 
+    Returns the promoted student ids. The caller must already hold the lock on
+    the section row and is responsible for committing.
+    """
+    db.flush()  # make sure pending drops/capacity changes are visible to the count below
+    seats_taken = (
+        db.query(func.count(Enrollment.id))
+        .filter(Enrollment.section_id == section.id, Enrollment.status == EnrollmentStatus.enrolled)
+        .scalar()
+    ) or 0
+
+    promoted_ids = []
+    while seats_taken < section.capacity:
+        next_in_line = (
+            db.query(Waitlist)
+            .filter(Waitlist.section_id == section.id)
+            .order_by(Waitlist.position)
+            .first()
+        )
+        if not next_in_line:
+            break
+
+        # A student who dropped this section earlier still has a row for it
+        # (student_id + section_id is unique), so reuse that row.
+        row = (
+            db.query(Enrollment)
+            .filter(
+                Enrollment.student_id == next_in_line.student_id,
+                Enrollment.section_id == section.id,
+            )
+            .first()
+        )
+        if row:
+            row.status = EnrollmentStatus.enrolled
+            row.grade = None
+        else:
+            row = Enrollment(
+                student_id=next_in_line.student_id,
+                section_id=section.id,
+                status=EnrollmentStatus.enrolled,
+            )
+            db.add(row)
+
+        promoted_ids.append(next_in_line.student_id)
+        db.delete(next_in_line)
+        db.flush()
+        db.add(AuditLog(
+            user_id=None, action="waitlist_promote", table_name="enrollments",
+            record_id=row.id,
+            details=f"section_id={section.id}, promoted_student_id={promoted_ids[-1]}",
+        ))
+        seats_taken += 1
+
+    # Close the gap so the first person in line is always position 1
+    if promoted_ids:
+        remaining = (
+            db.query(Waitlist)
+            .filter(Waitlist.section_id == section.id)
+            .order_by(Waitlist.position)
+            .all()
+        )
+        for new_position, entry in enumerate(remaining, start=1):
+            if entry.position != new_position:
+                entry.position = new_position
+                db.flush()
+
+    return promoted_ids
 @router.post("", response_model=EnrollmentResponse, status_code=201)
 def enroll(
     payload: EnrollmentCreate,
@@ -66,6 +135,8 @@ def enroll(
 
     required = _get_transitive_prerequisites(db, section.course_id)
     completed = _student_completed_course_ids(db, student.id)
+    if section.course_id in completed:
+        raise HTTPException(status_code=400, detail="Already completed this course")
     missing = required - completed
     if missing:
         missing_codes = [c.code for c in db.query(Course).filter(Course.id.in_(missing)).all()]
@@ -150,28 +221,10 @@ def drop(
         record_id=enrollment.id, details=f"section_id={section.id}",
     ))
 
-    next_in_line = (
-        db.query(Waitlist)
-        .filter(Waitlist.section_id == section.id)
-        .order_by(Waitlist.position)
-        .first()
-    )
-    promoted_student_id = None
-    if next_in_line:
-        promoted = Enrollment(
-            student_id=next_in_line.student_id,
-            section_id=section.id,
-            status=EnrollmentStatus.enrolled,
-        )
-        db.add(promoted)
-        promoted_student_id = next_in_line.student_id
-        db.delete(next_in_line)
-        db.flush()
-        db.add(AuditLog(
-            user_id=None, action="waitlist_promote", table_name="enrollments",
-            record_id=promoted.id,
-            details=f"section_id={section.id}, promoted_student_id={promoted_student_id}",
-        ))
+    promoted_ids = promote_from_waitlist(db, section)
 
     db.commit()
-    return DropResponse(status="dropped", promoted_student_id=promoted_student_id)
+    return DropResponse(
+        status="dropped",
+        promoted_student_id=promoted_ids[0] if promoted_ids else None,
+    )
