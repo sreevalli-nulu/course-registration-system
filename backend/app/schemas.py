@@ -212,3 +212,40 @@ class SectionUpdate(BaseModel):
     room: Optional[str] = None
     meeting_time: Optional[str] = None
     capacity: Optional[int] = Field(default=None, gt=0)
+
+
+
+# ---------- Staff: rosters and "my sections" ----------
+
+class RosterEntryOut(BaseModel):
+    enrollment_id: int
+    student_id: int
+    student_number: str
+    full_name: str
+    status: str
+    grade: Optional[str] = None
+
+
+class RosterOut(BaseModel):
+    section_id: int
+    course_code: str
+    course_title: str
+    term: str
+    section_number: str
+    capacity: int
+    seats_taken: int
+    students: List[RosterEntryOut]
+
+
+class InstructorSectionOut(BaseModel):
+    section_id: int
+    course_code: str
+    course_title: str
+    credits: int
+    term: str
+    section_number: str
+    room: Optional[str] = None
+    meeting_time: Optional[str] = None
+    capacity: int
+    seats_taken: int
+    waitlist_count: int
