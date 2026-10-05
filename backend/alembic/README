@@ -1,1 +1,126 @@
-﻿Generic single-database configuration.
+﻿# Course Registration System: Backend
+
+FastAPI + SQLAlchemy + Alembic on PostgreSQL (hosted on Supabase).
+
+## What it does
+
+- **Auth:** register, login, `/auth/me`, JWT tokens, and three roles (student, instructor, registrar).
+- **Catalog:** courses with prerequisites, and sections with live seat counts.
+- **Enrollment:**
+  - Transaction-safe: the section row is locked so two students can't take the last seat.
+  - The whole prerequisite chain is checked with a recursive CTE, not just direct prerequisites.
+  - A full section puts the student on the waitlist instead of failing.
+  - Dropping a course enrolls the next waitlisted student automatically.
+  - A student can't re-enroll in a course they've already completed (a failed course can be retaken).
+- **Student records:** current schedule and transcript, with a credit-weighted GPA.
+- **Staff tools:**
+  - Grading (instructors can only grade their own sections).
+  - Waitlist view.
+  - Create and edit courses and sections. Circular prerequisites are rejected, and raising a section's capacity enrolls waitlisted students.
+- **Database-level protection (PostgreSQL triggers):**
+  - `trg_enrollment_history` records every enrollment status or grade change in `enrollment_history`.
+  - `trg_section_capacity` refuses to overbook a section, even if the API is bypassed with raw SQL.
+
+## Setup
+
+Run everything from the `backend` folder. Python 3.11 was used.
+
+```powershell
+python -m venv venv
+venv\Scripts\activate            # Mac/Linux: source venv/bin/activate
+pip install -r requirements.txt
+copy .env.example .env           # Mac/Linux: cp .env.example .env
+```
+
+Open `.env` and fill in:
+
+- `DATABASE_URL`: the Supabase connection string. Use the **Session pooler** string (the direct one needs IPv6 and fails on many networks). If the password has symbols such as `@ / % #`, they must be percent-encoded, so a letters-and-numbers password is easiest.
+- `JWT_SECRET_KEY`: any long random string. Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`.
+
+Never commit `.env`. It is in `.gitignore`.
+
+**Using the shared database?** The tables, triggers and sample data already exist. Skip the next two commands and just start the server.
+
+**Fresh, empty database?**
+
+```powershell
+alembic upgrade head             # creates all tables and the two triggers
+python seed.py                   # optional: sample courses, sections and students
+```
+
+`seed.py` is safe to run more than once; it never changes or duplicates existing rows.
+
+Start the server:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+- API: http://localhost:8000
+- Interactive docs (try every endpoint): http://localhost:8000/docs
+
+## Test accounts
+
+Created by `seed.py`. Every account uses the password **`pass1234`**.
+
+| Email | Role |
+|---|---|
+| `registrar@college.edu` | registrar |
+| `instructor1@college.edu` to `instructor3@college.edu` | instructor |
+| `student3@college.edu` to `student10@college.edu` | student, with completed courses and grades |
+| `student1@college.edu`, `student2@college.edu` | student (early test accounts) |
+
+Enrollments and waitlists change as people test. Completed courses and grades are the stable part.
+
+## Endpoints
+
+| Method and path | Who |
+|---|---|
+| `POST /auth/register`, `POST /auth/login` | public |
+| `GET /auth/me` | any logged-in user |
+| `GET /courses`, `GET /courses/{id}`, `GET /courses/{id}/prerequisites`, `GET /sections` | public |
+| `POST /enrollments`, `DELETE /enrollments/{id}` | student |
+| `GET /students/me/schedule`, `GET /students/me/transcript` | student |
+| `PUT /enrollments/{id}/grade` | registrar, instructor (own sections) |
+| `GET /waitlist/{section_id}` | registrar, instructor (own sections) |
+| `POST /courses`, `PUT /courses/{id}`, `POST /sections`, `PUT /sections/{id}` | registrar |
+
+Login takes form data (`username` is the email), not JSON. Everything else is JSON, with `Authorization: Bearer <token>` on protected routes. Exact request and response shapes are in `/docs`.
+
+## Project layout
+
+```
+backend/
+├── app/
+│   ├── main.py            app, CORS, router wiring
+│   ├── database.py        engine and session
+│   ├── models.py          all tables
+│   ├── schemas.py         request/response shapes
+│   ├── auth.py            hashing, JWT, role checks
+│   └── routers/
+│       ├── auth.py        register, login
+│       ├── courses.py     course list, get, create
+│       ├── sections.py    section list, get, create
+│       ├── enrollments.py enroll, drop, waitlist promotion
+│       ├── me.py          /auth/me, schedule
+│       ├── grades.py      grading, transcript
+│       └── admin.py       waitlist view, course and section editing
+├── alembic/versions/      migrations (schema, then triggers)
+├── seed.py                sample data
+├── requirements.txt
+└── .env.example
+```
+
+## Database
+
+Tables: `users`, `students`, `instructors`, `courses`, `prerequisites`, `sections`, `enrollments`, `waitlist`, `audit_log`, `enrollment_history`.
+
+- `audit_log` is written by the API for actions such as enroll, drop, grade and course edits.
+- `enrollment_history` is written only by the database trigger.
+
+## Troubleshooting
+
+- **Login or any request returns "Internal Server Error".** The free Supabase project may be paused after a week of inactivity. Open the Supabase dashboard and restore it. The error in the terminal usually says it could not connect.
+- **New endpoints don't appear in `/docs`.** An old server may still be running on port 8000. Stop every `uvicorn` process (`Get-CimInstance Win32_Process -Filter "name like 'python%'"` lists them), start one fresh, and hard-refresh the page with `Ctrl+Shift+R`.
+- **`alembic` says it can't find `alembic.ini`.** You're not in the `backend` folder, or the virtual environment isn't active (the prompt should start with `(venv)`).
+- **`could not translate host name`** in `DATABASE_URL`. Use the Supabase Session pooler string, not the direct connection.
