@@ -95,3 +95,40 @@ class EnrollmentResponse(BaseModel):
 class DropResponse(BaseModel):
     status: str
     promoted_student_id: Optional[int] = None
+
+
+# ---------- Current user / schedule ----------
+
+class MeOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: EmailStr
+    full_name: str
+    role: RoleEnum
+
+
+class ScheduleEnrolledItem(BaseModel):
+    enrollment_id: int
+    section_id: int
+    course_code: str
+    course_title: str
+    credits: int
+    term: str
+    section_number: str
+    room: Optional[str] = None
+    meeting_time: Optional[str] = None
+
+
+class ScheduleWaitlistItem(BaseModel):
+    section_id: int
+    course_code: str
+    course_title: str
+    term: str
+    section_number: str
+    position: int
+
+
+class ScheduleResponse(BaseModel):
+    enrolled: List[ScheduleEnrolledItem]
+    waitlisted: List[ScheduleWaitlistItem]
