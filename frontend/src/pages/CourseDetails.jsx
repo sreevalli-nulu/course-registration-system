@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { formatTerm } from "../utils/format";
 
 function errorText(err, fallback) {
   if (!err.response) return "Unable to connect to the server.";
@@ -22,6 +23,7 @@ function CourseDetails() {
   const [course, setCourse] = useState(null);
   const [prerequisites, setPrerequisites] = useState([]);
   const [sections, setSections] = useState([]);
+  const [currentTerm, setCurrentTerm] = useState("");
   const [enrolledIds, setEnrolledIds] = useState(new Set());
   const [waitlistPositions, setWaitlistPositions] = useState({});
   const [loading, setLoading] = useState(true);
@@ -29,9 +31,14 @@ function CourseDetails() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  // Only sections of the term that is open for enrollment are shown.
   const loadSections = useCallback(async () => {
+    const termResponse = await api.get("/terms/current");
+    const term = termResponse.data.current_term;
+    setCurrentTerm(term);
+
     const response = await api.get("/sections", {
-      params: { course_id: courseId },
+      params: { course_id: courseId, term },
     });
     setSections(response.data);
   }, [courseId]);
@@ -169,7 +176,7 @@ function CourseDetails() {
       </section>
 
       <section>
-        <h2>Available Sections</h2>
+        <h2>Available Sections{currentTerm ? ` — ${formatTerm(currentTerm)}` : ""}</h2>
 
         {sections.length > 0 ? (
           <div className="sections-list">
@@ -237,7 +244,7 @@ function CourseDetails() {
             })}
           </div>
         ) : (
-          <p>No sections are currently listed for this course.</p>
+          <p>This course is not offered in {formatTerm(currentTerm) || "the current term"}.</p>
         )}
 
         {!isStudent && (

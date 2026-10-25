@@ -27,10 +27,16 @@ def _with_seats_taken(db: Session, section: Section) -> SectionOut:
 
 
 @router.get("", response_model=List[SectionOut])
-def list_sections(course_id: Optional[int] = Query(default=None), db: Session = Depends(get_db)):
+def list_sections(
+    course_id: Optional[int] = Query(default=None),
+    term: Optional[str] = Query(default=None, description="e.g. Fall2026"),
+    db: Session = Depends(get_db),
+):
     query = db.query(Section)
     if course_id is not None:
         query = query.filter(Section.course_id == course_id)
+    if term is not None:
+        query = query.filter(Section.term == term)
     sections = query.order_by(Section.term, Section.section_number).all()
     return [_with_seats_taken(db, s) for s in sections]
 

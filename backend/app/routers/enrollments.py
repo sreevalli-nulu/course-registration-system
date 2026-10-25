@@ -9,6 +9,7 @@ from app.models import (
 )
 from app.schemas import EnrollmentCreate, EnrollmentResponse, DropResponse
 from app.auth import require_role
+from app.settings import CURRENT_TERM
 
 router = APIRouter(prefix="/enrollments", tags=["enrollments"])
 
@@ -145,6 +146,11 @@ def enroll(
     )
     if not section:
         raise HTTPException(status_code=404, detail="Section not found")
+    if section.term != CURRENT_TERM:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Enrollment is closed for {section.term} (current term is {CURRENT_TERM})",
+        )
 
     required = _get_transitive_prerequisites(db, section.course_id)
     completed = _student_completed_course_ids(db, student.id)
