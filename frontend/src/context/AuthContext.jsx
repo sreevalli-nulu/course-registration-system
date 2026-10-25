@@ -13,6 +13,14 @@ export function AuthProvider({ children }) {
     return localStorage.getItem("token");
   });
 
+  const logout = () => {
+    setUser(null);
+    setToken(null);
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+  };
+
   useEffect(() => {
     const loadUser = async () => {
       const savedToken = localStorage.getItem("token");
@@ -26,8 +34,11 @@ export function AuthProvider({ children }) {
 
         setUser(currentUser);
         localStorage.setItem("user", JSON.stringify(currentUser));
-      } catch {
-        logout();
+      } catch (err) {
+        // Only a rejected token logs the user out; a server that is down does not.
+        if (err.response?.status === 401) {
+          logout();
+        }
       }
     };
 
@@ -40,14 +51,14 @@ export function AuthProvider({ children }) {
 
     localStorage.setItem("token", jwtToken);
     localStorage.setItem("user", JSON.stringify(userData));
-  };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    // The login response only has the role, so fetch the full profile (name etc.).
+    getCurrentUser()
+      .then((currentUser) => {
+        setUser(currentUser);
+        localStorage.setItem("user", JSON.stringify(currentUser));
+      })
+      .catch(() => {});
   };
 
   return (

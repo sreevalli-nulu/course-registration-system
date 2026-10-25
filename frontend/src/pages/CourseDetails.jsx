@@ -1,82 +1,57 @@
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api from "../services/api";
-import { useEnrollments } from "../context/EnrollmentContext";
+import { useAuth } from "../context/AuthContext";
 
-const sampleCourses = [
-  {
-    id: 1,
-    code: "CS101",
-    title: "Introduction to Programming",
-    credits: 3,
-    description: "Learn programming fundamentals and problem-solving.",
-  },
-  {
-    id: 2,
-    code: "CS201",
-    title: "Data Structures",
-    credits: 4,
-    description:
-      "Explore data structures, algorithms, and efficient problem-solving.",
-  },
-  {
-    id: 3,
-    code: "CS202",
-    title: "Database Management Systems",
-    credits: 3,
-    description:
-      "Learn database design, SQL, normalization, and transactions.",
-  },
-  {
-    id: 4,
-    code: "CS401",
-    title: "Advanced Database Systems",
-    credits: 4,
-    description:
-      "Study advanced database concepts and database system design.",
-  },
-];
+function errorText(err, fallback) {
+  if (!err.response) return "Unable to connect to the server.";
 
-const samplePrerequisites = {
-  1: [],
-  2: [{ id: 1, code: "CS101", title: "Introduction to Programming" }],
-  3: [{ id: 1, code: "CS101", title: "Introduction to Programming" }],
-  4: [{ id: 3, code: "CS202", title: "Database Management Systems" }],
-};
+  const detail = err.response.data?.detail;
 
-const sampleSections = [
-  {
-    id: "demo-1",
-    section_number: "01",
-    term: "Fall 2026",
-    meeting_time: "Tuesday & Thursday",
-    room: "Room 101",
-    capacity: 30,
-    seats_taken: 18,
-  },
-  {
-    id: "demo-2",
-    section_number: "02",
-    term: "Fall 2026",
-    meeting_time: "Tuesday & Thursday",
-    room: "Room 204",
-    capacity: 30,
-    seats_taken: 30,
-  },
-];
+  if (Array.isArray(detail)) return detail.map((item) => item.msg).join(", ");
+  if (typeof detail === "string") return detail;
+
+  return fallback;
+}
 
 function CourseDetails() {
   const { courseId } = useParams();
-  const { demoEnrollments, enrollDemo } = useEnrollments();
+  const { user } = useAuth();
+  const isStudent = user?.role === "student";
 
   const [course, setCourse] = useState(null);
   const [prerequisites, setPrerequisites] = useState([]);
   const [sections, setSections] = useState([]);
+  const [enrolledIds, setEnrolledIds] = useState(new Set());
+  const [waitlistPositions, setWaitlistPositions] = useState({});
   const [loading, setLoading] = useState(true);
-  const [usingSampleData, setUsingSampleData] = useState(false);
+  const [busySectionId, setBusySectionId] = useState(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const loadSections = useCallback(async () => {
+    const response = await api.get("/sections", {
+      params: { course_id: courseId },
+    });
+    setSections(response.data);
+  }, [courseId]);
+
+  // Which sections is the logged-in student already enrolled in / waitlisted for?
+  const loadMyStatus = useCallback(async () => {
+    if (!isStudent) return;
+
+    const response = await api.get("/students/me/schedule");
+
+    setEnrolledIds(
+      new Set(response.data.enrolled.map((item) => item.section_id))
+    );
+
+    const positions = {};
+    response.data.waitlisted.forEach((item) => {
+      positions[item.section_id] = item.position;
+    });
+    setWaitlistPositions(positions);
+  }, [isStudent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -85,55 +60,31 @@ function CourseDetails() {
       setLoading(true);
       setError("");
       setMessage("");
-      setUsingSampleData(false);
 
       try {
-        const [
-          courseResponse,
-          prerequisiteResponse,
-          sectionResponse,
-        ] = await Promise.all([
+        const [courseResponse, prerequisiteResponse] = await Promise.all([
           api.get(`/courses/${courseId}`),
           api.get(`/courses/${courseId}/prerequisites`),
-          api.get("/sections", {
-            params: { course_id: courseId },
-          }),
+          loadSections(),
+          loadMyStatus(),
         ]);
 
         if (cancelled) return;
 
         setCourse(courseResponse.data);
         setPrerequisites(prerequisiteResponse.data);
-        setSections(sectionResponse.data);
       } catch (err) {
         if (cancelled) return;
 
         console.error("Unable to fetch course details:", err);
 
-        const sampleCourse = sampleCourses.find(
-          (item) => String(item.id) === String(courseId)
+        setError(
+          err.response?.status === 404
+            ? "This course could not be found."
+            : errorText(err, "Unable to load this course.")
         );
-
-        if (sampleCourse) {
-          setCourse(sampleCourse);
-          setPrerequisites(
-            samplePrerequisites[sampleCourse.id] || []
-          );
-
-          setSections(
-            sampleCourse.id === 1
-              ? [sampleSections[0]]
-              : sampleSections
-          );
-
-          setUsingSampleData(true);
-        } else {
-          setError("This course could not be found.");
-        }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -142,50 +93,31 @@ function CourseDetails() {
     return () => {
       cancelled = true;
     };
-  }, [courseId]);
+  }, [courseId, loadSections, loadMyStatus]);
 
   const handleEnroll = async (section) => {
-    const isDemo =
-      usingSampleData ||
-      String(section.id).startsWith("demo-");
-
-    if (isDemo) {
-      const alreadyEnrolled = demoEnrollments.some(
-        (item) =>
-          String(item.courseId) === String(course.id) &&
-          String(item.originalSectionId) === String(section.id)
-      );
-
-      if (alreadyEnrolled) {
-        setMessage("You are already enrolled in this demo section.");
-        return;
-      }
-
-      enrollDemo({
-        courseId: course.id,
-        sectionId: `${course.id}-${section.id}`,
-        originalSectionId: section.id,
-        course,
-        section: { ...section },
-      });
-
-      setMessage(
-        "Demo enrollment added! No real server registration has been made."
-      );
-      return;
-    }
+    setBusySectionId(section.id);
+    setMessage("");
 
     try {
-      await api.post("/enrollments", {
+      const response = await api.post("/enrollments", {
         section_id: section.id,
       });
 
-      setMessage("Enrollment successful! Refresh your schedule to see updated server data.");
+      if (response.data.outcome === "waitlisted") {
+        setMessage(
+          `Section is full. You are #${response.data.waitlist_position} on the waitlist.`
+        );
+      } else {
+        setMessage("Enrollment successful!");
+      }
+
+      // Re-read from the server so seats and status are always the real numbers.
+      await Promise.all([loadSections(), loadMyStatus()]);
     } catch (err) {
-      setMessage(
-        err.response?.data?.detail ||
-          "Enrollment failed. Please check your eligibility and try again."
-      );
+      setMessage(errorText(err, "Enrollment failed. Please try again."));
+    } finally {
+      setBusySectionId(null);
     }
   };
 
@@ -201,7 +133,7 @@ function CourseDetails() {
     return (
       <div className="course-details-page">
         <Link to="/courses">← Back to Course Catalog</Link>
-        <h2>Course not found</h2>
+        <h2>Course unavailable</h2>
         <p>{error || "This course is unavailable."}</p>
       </div>
     );
@@ -211,17 +143,9 @@ function CourseDetails() {
     <div className="course-details-page">
       <Link to="/courses">← Back to Course Catalog</Link>
 
-      {usingSampleData && (
-        <p className="demo-notice">
-          Demo mode: this page displays sample course information,
-          not live database records. Demo enrollments are saved locally,
-          not to the server.
-        </p>
-      )}
-
       <header>
-        <p>{course.code || course.course_code}</p>
-        <h1>{course.title || course.name}</h1>
+        <p>{course.code}</p>
+        <h1>{course.title}</h1>
         <p>{course.description || "No description available."}</p>
         <p>
           <strong>Credits:</strong> {course.credits}
@@ -235,8 +159,7 @@ function CourseDetails() {
           <ul>
             {prerequisites.map((prerequisite) => (
               <li key={prerequisite.id}>
-                {prerequisite.code || prerequisite.course_code}:{" "}
-                {prerequisite.title || prerequisite.name}
+                {prerequisite.code}: {prerequisite.title}
               </li>
             ))}
           </ul>
@@ -253,28 +176,25 @@ function CourseDetails() {
             {sections.map((section) => {
               const capacity = Number(section.capacity) || 0;
               const seatsTaken = Number(section.seats_taken) || 0;
-              const seatsAvailable = Math.max(
-                0,
-                capacity - seatsTaken
-              );
+              const seatsAvailable = Math.max(0, capacity - seatsTaken);
               const isFull = seatsAvailable === 0;
 
-              const alreadyEnrolled = demoEnrollments.some(
-                (item) =>
-                  String(item.courseId) === String(course.id) &&
-                  String(item.originalSectionId) === String(section.id)
-              );
+              const isEnrolled = enrolledIds.has(section.id);
+              const waitlistPosition = waitlistPositions[section.id];
+              const isWaitlisted = waitlistPosition !== undefined;
+
+              let buttonLabel = "Enroll";
+              if (isEnrolled) buttonLabel = "Enrolled";
+              else if (isWaitlisted) buttonLabel = `On waitlist (#${waitlistPosition})`;
+              else if (isFull) buttonLabel = "Join waitlist";
+              if (busySectionId === section.id) buttonLabel = "Please wait...";
 
               return (
-                <article
-                  key={section.id}
-                  className="section-card"
-                >
-                  <h3>Section {section.section_number || section.section || "01"}</h3>
+                <article key={section.id} className="section-card">
+                  <h3>Section {section.section_number}</h3>
 
                   <p>
-                    <strong>Term:</strong>{" "}
-                    {section.term || "Fall 2026"}
+                    <strong>Term:</strong> {section.term}
                   </p>
 
                   <p>
@@ -283,42 +203,45 @@ function CourseDetails() {
                   </p>
 
                   <p>
-                    <strong>Room:</strong>{" "}
-                    {section.room || "Not announced"}
+                    <strong>Room:</strong> {section.room || "Not announced"}
                   </p>
 
                   <p>
-                    <strong>Seats available:</strong>{" "}
-                    {seatsAvailable} / {capacity}
+                    <strong>Seats available:</strong> {seatsAvailable} /{" "}
+                    {capacity}
                   </p>
 
                   {isFull ? (
                     <p className="section-full">
-                      Full — waitlist may be available
+                      Full — you can join the waitlist
                     </p>
                   ) : (
-                    <p className="section-available">
-                      Seats available
-                    </p>
+                    <p className="section-available">Seats available</p>
                   )}
 
-                  <button
-                    type="button"
-                    onClick={() => handleEnroll(section)}
-                    disabled={isFull || alreadyEnrolled}
-                  >
-                    {alreadyEnrolled
-                      ? "Already Enrolled (Demo)"
-                      : isFull
-                        ? "Section Full"
-                        : "Enroll"}
-                  </button>
+                  {isStudent && (
+                    <button
+                      type="button"
+                      onClick={() => handleEnroll(section)}
+                      disabled={
+                        isEnrolled ||
+                        isWaitlisted ||
+                        busySectionId === section.id
+                      }
+                    >
+                      {buttonLabel}
+                    </button>
+                  )}
                 </article>
               );
             })}
           </div>
         ) : (
           <p>No sections are currently listed for this course.</p>
+        )}
+
+        {!isStudent && (
+          <p>Only student accounts can enroll in sections.</p>
         )}
 
         {message && (

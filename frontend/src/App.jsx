@@ -7,10 +7,10 @@ import {
   Outlet,
 } from "react-router-dom";
 
-import { EnrollmentProvider } from "./context/EnrollmentContext";
 import { AuthProvider } from "./context/AuthContext";
 
 import Navbar from "./components/Navbar";
+import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Courses from "./pages/Courses";
@@ -32,24 +32,24 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <EnrollmentProvider>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
+          <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/courses" element={<Courses />} />
-              <Route
-                path="/courses/:courseId"
-                element={<CourseDetails />}
-              />
-              <Route path="/schedule" element={<Schedule />} />
-              <Route path="/transcript" element={<Transcript />} />
+              <Route path="/courses/:courseId" element={<CourseDetails />} />
+
+              <Route element={<ProtectedRoute roles={["student"]} />}>
+                <Route path="/schedule" element={<Schedule />} />
+                <Route path="/transcript" element={<Transcript />} />
+              </Route>
             </Route>
-          </Routes>
-        </EnrollmentProvider>
+          </Route>
+        </Routes>
       </AuthProvider>
     </BrowserRouter>
   );

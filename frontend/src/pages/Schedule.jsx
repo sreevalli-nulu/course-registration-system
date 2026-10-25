@@ -1,62 +1,60 @@
-
-import { useEnrollments } from "../context/EnrollmentContext";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import api from "../services/api";
+import { errorText, formatTerm, parseMeetingTime } from "../utils/format";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 
-const TIME_SLOTS = [
-  "9:00–10:00 AM",
-  "10:00–11:00 AM",
-  "11:00 AM–12:00 PM",
-  "1:00–2:00 PM",
-  "2:00–3:00 PM",
-];
-
-// Illustrative demo timetable. Change these to match your
-// college's actual timetable when you have the official timings.
-const COURSE_TIMETABLE = {
-  CS101: {
-    days: ["Monday", "Wednesday"],
-    time: "9:00–10:00 AM",
-    room: "Room 101",
-  },
-  CS201: {
-    days: ["Tuesday", "Thursday"],
-    time: "10:00–11:00 AM",
-    room: "Room 204",
-  },
-  CS202: {
-    days: ["Monday", "Wednesday"],
-    time: "11:00 AM–12:00 PM",
-    room: "Computer Lab 2",
-  },
-  CS401: {
-    days: ["Tuesday", "Friday"],
-    time: "2:00–3:00 PM",
-    room: "Room 305",
-  },
-};
-
-function getCourseCode(course) {
-  return course?.course_code || course?.code || course?.courseCode || "";
-}
-
 function Schedule() {
-  const { demoEnrollments } = useEnrollments();
+  const [enrolled, setEnrolled] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedTerm, setSelectedTerm] = useState("");
 
-  const classes = demoEnrollments.map((enrollment) => {
-    const course = enrollment.course;
-    const code = getCourseCode(course);
-    const timetable = COURSE_TIMETABLE[code];
+  useEffect(() => {
+    let cancelled = false;
 
-    return {
-      id: enrollment.sectionId,
-      code,
-      title: course?.title || course?.name || code,
-      room: timetable?.room || enrollment.section?.room || "Room TBA",
-      days: timetable?.days || ["Monday", "Wednesday"],
-      time: timetable?.time || "9:00–10:00 AM",
+    const load = async () => {
+      try {
+        const response = await api.get("/students/me/schedule");
+        if (cancelled) return;
+
+        setEnrolled(response.data.enrolled);
+        setError("");
+      } catch (err) {
+        if (!cancelled) {
+          setError(errorText(err, "Unable to load your schedule."));
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-  });
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const terms = useMemo(
+    () => [...new Set(enrolled.map((item) => item.term))].sort(),
+    [enrolled]
+  );
+
+  // Default to the latest term unless the student picked another one.
+  const activeTerm = terms.includes(selectedTerm)
+    ? selectedTerm
+    : terms[terms.length - 1] || "";
+
+  const termClasses = enrolled
+    .filter((item) => item.term === activeTerm)
+    .map((item) => ({ ...item, parsed: parseMeetingTime(item.meeting_time) }));
+
+  const scheduled = termClasses.filter((item) => item.parsed);
+  const unscheduled = termClasses.filter((item) => !item.parsed);
+
+  const timeSlots = [...new Set(scheduled.map((item) => item.parsed.time))].sort();
 
   return (
     <main className="schedule-page">
@@ -65,64 +63,95 @@ function Schedule() {
         <p>Your weekly class timetable.</p>
       </header>
 
-      {classes.length === 0 ? (
+      {loading ? (
+        <p>Loading your schedule...</p>
+      ) : error ? (
+        <section className="empty-state">
+          <h2>Something went wrong</h2>
+          <p>{error}</p>
+        </section>
+      ) : enrolled.length === 0 ? (
         <section className="empty-state">
           <h2>No classes scheduled yet</h2>
           <p>Enroll in a course to see it on your timetable.</p>
+          <Link to="/courses">Browse courses</Link>
         </section>
       ) : (
         <>
           <div className="schedule-note">
-            Demo timetable · Monday–Friday · 9 AM–3 PM
-          </div>
-
-          <div className="timetable-wrapper">
-            <table className="timetable">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  {DAYS.map((day) => (
-                    <th key={day}>{day}</th>
+            {terms.length > 1 ? (
+              <label>
+                Term:{" "}
+                <select
+                  value={activeTerm}
+                  onChange={(event) => setSelectedTerm(event.target.value)}
+                >
+                  {terms.map((term) => (
+                    <option key={term} value={term}>
+                      {formatTerm(term)}
+                    </option>
                   ))}
-                </tr>
-              </thead>
-
-              <tbody>
-                {TIME_SLOTS.map((slot) => (
-                  <tr key={slot}>
-                    <th className="timetable-time">{slot}</th>
-
-                    {DAYS.map((day) => {
-                      const scheduledClasses = classes.filter(
-                        (item) =>
-                          item.days.includes(day) && item.time === slot
-                      );
-
-                      return (
-                        <td key={day}>
-                          {scheduledClasses.map((item) => (
-                            <div
-                              className="timetable-class"
-                              key={item.id}
-                            >
-                              <strong>{item.code}</strong>
-                              <span>{item.title}</span>
-                              <small>{item.room}</small>
-                            </div>
-                          ))}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                </select>
+              </label>
+            ) : (
+              <span>{formatTerm(activeTerm)}</span>
+            )}
           </div>
 
-          <p className="schedule-footnote">
-            These are sample timings for the frontend demo, not official
-            college class timings.
-          </p>
+          {scheduled.length > 0 && (
+            <div className="timetable-wrapper">
+              <table className="timetable">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    {DAYS.map((day) => (
+                      <th key={day}>{day}</th>
+                    ))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {timeSlots.map((slot) => (
+                    <tr key={slot}>
+                      <th className="timetable-time">{slot}</th>
+
+                      {DAYS.map((day) => {
+                        const cellClasses = scheduled.filter(
+                          (item) =>
+                            item.parsed.days.includes(day) &&
+                            item.parsed.time === slot
+                        );
+
+                        return (
+                          <td key={day}>
+                            {cellClasses.map((item) => (
+                              <div
+                                className="timetable-class"
+                                key={item.enrollment_id}
+                              >
+                                <strong>{item.course_code}</strong>
+                                <span>{item.course_title}</span>
+                                <small>{item.room || "Room TBA"}</small>
+                              </div>
+                            ))}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {unscheduled.length > 0 && (
+            <p className="schedule-footnote">
+              No meeting time yet:{" "}
+              {unscheduled
+                .map((item) => `${item.course_code} (Section ${item.section_number})`)
+                .join(", ")}
+            </p>
+          )}
         </>
       )}
     </main>

@@ -1,4 +1,3 @@
-
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -7,12 +6,12 @@ function Navbar() {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    if (typeof logout === "function") {
-      logout();
-    }
-
+    logout();
     navigate("/login");
   };
+
+  const displayName = user?.full_name || user?.email;
+  const isStudent = user?.role === "student";
 
   return (
     <nav className="app-navbar">
@@ -23,12 +22,12 @@ function Navbar() {
       <div className="navbar-links">
         <NavLink to="/dashboard">Dashboard</NavLink>
         <NavLink to="/courses">Courses</NavLink>
-        <NavLink to="/schedule">Schedule</NavLink>
-        <NavLink to="/transcript">Transcript</NavLink>
+        {isStudent && <NavLink to="/schedule">Schedule</NavLink>}
+        {isStudent && <NavLink to="/transcript">Transcript</NavLink>}
       </div>
 
       <div className="navbar-account">
-        {user?.name && <span>{user.name}</span>}
+        {displayName && <span>{displayName}</span>}
         <button type="button" onClick={handleLogout}>
           Log out
         </button>

@@ -3,42 +3,10 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../services/api";
 
-const sampleCourses = [
-  {
-    id: 1,
-    code: "CS101",
-    title: "Introduction to Programming",
-    credits: 3,
-    description: "Learn programming fundamentals and problem-solving.",
-  },
-  {
-    id: 2,
-    code: "CS201",
-    title: "Data Structures",
-    credits: 4,
-    description: "Explore data structures, algorithms, and efficient problem-solving.",
-  },
-  {
-    id: 3,
-    code: "CS202",
-    title: "Database Management Systems",
-    credits: 3,
-    description: "Learn database design, SQL, normalization, and transactions.",
-  },
-  {
-    id: 4,
-    code: "CS401",
-    title: "Advanced Database Systems",
-    credits: 4,
-    description: "Study advanced database concepts and database system design.",
-  },
-];
-
 function Courses() {
   const [search, setSearch] = useState("");
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [usingSampleData, setUsingSampleData] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -46,14 +14,16 @@ function Courses() {
       try {
         const response = await api.get("/courses");
         setCourses(response.data);
-        setUsingSampleData(false);
         setError("");
       } catch (err) {
         console.error("Unable to fetch courses:", err);
 
-        setCourses(sampleCourses);
-        setUsingSampleData(true);
-        setError("");
+        setCourses([]);
+        setError(
+          err.response
+            ? "Unable to load courses from the server."
+            : "Unable to connect to the server. Is the backend running?"
+        );
       } finally {
         setLoading(false);
       }
@@ -111,20 +81,13 @@ function Courses() {
           <p>Loading courses...</p>
         ) : (
           <>
-            {usingSampleData && (
-              <p className="demo-notice">
-                Demo mode: showing sample courses because the server data
-                is currently unavailable. These are not live database records.
-              </p>
-            )}
-
             {error && (
               <div className="no-courses">
                 <p>{error}</p>
               </div>
             )}
 
-            {filteredCourses.length > 0 ? (
+            {error ? null : filteredCourses.length > 0 ? (
               <div className="course-grid">
                 {filteredCourses.map((course) => (
                   <article className="course-card" key={course.id}>
