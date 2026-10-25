@@ -291,7 +291,7 @@ function Dashboard() {
           )}
         </div>
       </section>
-      <footer className="dashboard-credit">Frontend — Gayathri</footer>
+
     </main>
   );
 }
