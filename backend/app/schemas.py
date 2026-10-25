@@ -46,9 +46,9 @@ class CourseOut(BaseModel):
 
 
 class CourseCreate(BaseModel):
-    code: str
-    title: str
-    credits: int
+    code: str = Field(min_length=1, max_length=20)
+    title: str = Field(min_length=1)
+    credits: int = Field(gt=0, le=12)
     description: Optional[str] = None
     prerequisite_course_ids: List[int] = []
 
@@ -76,7 +76,7 @@ class SectionCreate(BaseModel):
     section_number: str
     room: Optional[str] = None
     meeting_time: Optional[str] = None
-    capacity: int
+    capacity: int = Field(gt=0)
 
 
 # ---------- Enrollments ----------
@@ -235,6 +235,13 @@ class RosterOut(BaseModel):
     capacity: int
     seats_taken: int
     students: List[RosterEntryOut]
+
+
+class InstructorOut(BaseModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    department: Optional[str] = None
 
 
 class InstructorSectionOut(BaseModel):

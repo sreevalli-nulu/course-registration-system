@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     Section, Enrollment, EnrollmentStatus, Waitlist, Student,
-    AuditLog, RoleEnum, Course, User, Notification,
+    AuditLog, RoleEnum, Course, User, Notification, SEAT_HOLDING_STATUSES,
 )
 from app.schemas import EnrollmentCreate, EnrollmentResponse, DropResponse
 from app.auth import require_role
@@ -55,7 +55,7 @@ def promote_from_waitlist(db: Session, section: Section) -> list:
     db.flush()  # make sure pending drops/capacity changes are visible to the count below
     seats_taken = (
         db.query(func.count(Enrollment.id))
-        .filter(Enrollment.section_id == section.id, Enrollment.status == EnrollmentStatus.enrolled)
+        .filter(Enrollment.section_id == section.id, Enrollment.status.in_(SEAT_HOLDING_STATUSES))
         .scalar()
     ) or 0
 
@@ -174,7 +174,7 @@ def enroll(
 
     seats_taken = (
         db.query(func.count(Enrollment.id))
-        .filter(Enrollment.section_id == section.id, Enrollment.status == EnrollmentStatus.enrolled)
+        .filter(Enrollment.section_id == section.id, Enrollment.status.in_(SEAT_HOLDING_STATUSES))
         .scalar()
     ) or 0
 

@@ -34,6 +34,14 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     if db.query(Course).filter(Course.code == payload.code).first():
         raise HTTPException(status_code=400, detail="Course code already exists")
 
+    prereq_ids = set(payload.prerequisite_course_ids)
+    if prereq_ids:
+        found = {c.id for c in db.query(Course).filter(Course.id.in_(prereq_ids)).all()}
+        if prereq_ids - found:
+            raise HTTPException(
+                status_code=400, detail=f"Prerequisite course not found: {sorted(prereq_ids - found)}"
+            )
+
     course = Course(
         code=payload.code,
         title=payload.title,
@@ -43,9 +51,7 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
     db.add(course)
     db.flush()
 
-    for prereq_id in payload.prerequisite_course_ids:
-        if prereq_id == course.id:
-            continue
+    for prereq_id in prereq_ids:
         db.add(Prerequisite(course_id=course.id, prerequisite_course_id=prereq_id))
 
     db.commit()

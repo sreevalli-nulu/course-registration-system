@@ -21,6 +21,10 @@ class EnrollmentStatus(str, enum.Enum):
     completed = "completed"
 
 
+# A seat stays taken after the grade is posted (status "completed"); only a drop frees it.
+SEAT_HOLDING_STATUSES = (EnrollmentStatus.enrolled, EnrollmentStatus.completed)
+
+
 class User(Base):
     """Auth identity. Role drives what a token holder is allowed to do."""
     __tablename__ = "users"

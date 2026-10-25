@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     Course, Enrollment, EnrollmentStatus, Instructor, RoleEnum, Section,
-    Student, User, Waitlist,
+    Student, User, Waitlist, SEAT_HOLDING_STATUSES,
 )
-from app.schemas import InstructorSectionOut, RosterEntryOut, RosterOut
+from app.schemas import InstructorOut, InstructorSectionOut, RosterEntryOut, RosterOut
 from app.auth import require_role
 
 router = APIRouter(tags=["staff"])
@@ -18,7 +18,7 @@ router = APIRouter(tags=["staff"])
 def _seats_taken(db: Session, section_id: int) -> int:
     return (
         db.query(func.count(Enrollment.id))
-        .filter(Enrollment.section_id == section_id, Enrollment.status == EnrollmentStatus.enrolled)
+        .filter(Enrollment.section_id == section_id, Enrollment.status.in_(SEAT_HOLDING_STATUSES))
         .scalar()
     ) or 0
 
@@ -97,3 +97,21 @@ def my_sections(
             seats_taken=_seats_taken(db, section.id), waitlist_count=waitlist_count,
         ))
     return out
+
+
+@router.get("/instructors", response_model=List[InstructorOut])
+def list_instructors(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(RoleEnum.registrar)),
+):
+    """All instructors, so a registrar can assign one to a section."""
+    rows = (
+        db.query(Instructor, User)
+        .join(User, Instructor.user_id == User.id)
+        .order_by(User.full_name)
+        .all()
+    )
+    return [
+        InstructorOut(id=i.id, full_name=u.full_name, email=u.email, department=i.department)
+        for i, u in rows
+    ]

@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Section, Enrollment, EnrollmentStatus, RoleEnum
+from app.models import Course, Instructor, Section, Enrollment, RoleEnum, SEAT_HOLDING_STATUSES
 from app.schemas import SectionOut, SectionCreate
 from app.auth import require_role
 
@@ -17,7 +17,7 @@ def _with_seats_taken(db: Session, section: Section) -> SectionOut:
         db.query(func.count(Enrollment.id))
         .filter(
             Enrollment.section_id == section.id,
-            Enrollment.status == EnrollmentStatus.enrolled,
+            Enrollment.status.in_(SEAT_HOLDING_STATUSES),
         )
         .scalar()
     )
@@ -56,6 +56,25 @@ def get_section(section_id: int, db: Session = Depends(get_db)):
     dependencies=[Depends(require_role(RoleEnum.registrar))],
 )
 def create_section(payload: SectionCreate, db: Session = Depends(get_db)):
+    if not db.query(Course).filter(Course.id == payload.course_id).first():
+        raise HTTPException(status_code=400, detail="Course not found")
+    if payload.instructor_id is not None and not db.query(Instructor).filter(
+        Instructor.id == payload.instructor_id
+    ).first():
+        raise HTTPException(status_code=400, detail="Instructor not found")
+    if (
+        db.query(Section)
+        .filter(
+            Section.course_id == payload.course_id,
+            Section.term == payload.term,
+            Section.section_number == payload.section_number,
+        )
+        .first()
+    ):
+        raise HTTPException(
+            status_code=400, detail="That course already has a section with this term and number"
+        )
+
     section = Section(**payload.model_dump())
     db.add(section)
     db.commit()

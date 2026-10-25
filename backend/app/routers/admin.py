@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     AuditLog, Course, Enrollment, EnrollmentStatus, Instructor, Prerequisite,
-    RoleEnum, Section, Student, User, Waitlist,
+    RoleEnum, Section, Student, User, Waitlist, SEAT_HOLDING_STATUSES,
 )
 from app.schemas import (
     CourseDetailOut, CoursePrereqOut, CourseUpdate, SectionOut, SectionUpdate,
@@ -112,7 +112,7 @@ def update_section(
     if "capacity" in changes and changes["capacity"] is not None:
         seats_taken = (
             db.query(func.count(Enrollment.id))
-            .filter(Enrollment.section_id == section.id, Enrollment.status == EnrollmentStatus.enrolled)
+            .filter(Enrollment.section_id == section.id, Enrollment.status.in_(SEAT_HOLDING_STATUSES))
             .scalar()
         ) or 0
         if changes["capacity"] < seats_taken:
@@ -175,7 +175,7 @@ def view_waitlist(
     course = db.query(Course).filter(Course.id == section.course_id).first()
     seats_taken = (
         db.query(func.count(Enrollment.id))
-        .filter(Enrollment.section_id == section.id, Enrollment.status == EnrollmentStatus.enrolled)
+        .filter(Enrollment.section_id == section.id, Enrollment.status.in_(SEAT_HOLDING_STATUSES))
         .scalar()
     ) or 0
     rows = (

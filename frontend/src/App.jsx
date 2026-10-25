@@ -14,11 +14,15 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Courses from "./pages/Courses";
-import Dashboard from "./pages/Dashboard";
+import RoleDashboard from "./pages/RoleDashboard";
 import CourseDetails from "./pages/CourseDetails";
 import Schedule from "./pages/Schedule";
 import Transcript from "./pages/Transcript";
 import Notifications from "./pages/Notifications";
+import SectionManage from "./pages/SectionManage";
+import ManageCourses from "./pages/ManageCourses";
+import ManageSections from "./pages/ManageSections";
+import CreateAccount from "./pages/CreateAccount";
 
 function MainLayout() {
   return (
@@ -40,7 +44,7 @@ function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route element={<MainLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<RoleDashboard />} />
               <Route path="/courses" element={<Courses />} />
               <Route path="/courses/:courseId" element={<CourseDetails />} />
               <Route path="/notifications" element={<Notifications />} />
@@ -48,6 +52,16 @@ function App() {
               <Route element={<ProtectedRoute roles={["student"]} />}>
                 <Route path="/schedule" element={<Schedule />} />
                 <Route path="/transcript" element={<Transcript />} />
+              </Route>
+
+              <Route element={<ProtectedRoute roles={["instructor", "registrar"]} />}>
+                <Route path="/sections/:sectionId" element={<SectionManage />} />
+              </Route>
+
+              <Route element={<ProtectedRoute roles={["registrar"]} />}>
+                <Route path="/admin/courses" element={<ManageCourses />} />
+                <Route path="/admin/sections" element={<ManageSections />} />
+                <Route path="/admin/accounts" element={<CreateAccount />} />
               </Route>
             </Route>
           </Route>

@@ -44,6 +44,7 @@ function Navbar() {
 
   const displayName = user?.full_name || user?.email;
   const isStudent = user?.role === "student";
+  const isRegistrar = user?.role === "registrar";
 
   return (
     <nav className="app-navbar">
@@ -56,6 +57,9 @@ function Navbar() {
         <NavLink to="/courses">Courses</NavLink>
         {isStudent && <NavLink to="/schedule">Schedule</NavLink>}
         {isStudent && <NavLink to="/transcript">Transcript</NavLink>}
+        {isRegistrar && <NavLink to="/admin/sections">Sections</NavLink>}
+        {isRegistrar && <NavLink to="/admin/courses">Manage courses</NavLink>}
+        {isRegistrar && <NavLink to="/admin/accounts">Accounts</NavLink>}
       </div>
 
       <div className="navbar-account">
