@@ -1,17 +1,33 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+﻿from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User, Student, Instructor, RoleEnum
 from app.schemas import UserRegister, UserOut, Token
-from app.auth import hash_password, verify_password, create_access_token
+from app.auth import hash_password, verify_password, create_access_token, get_optional_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: UserRegister, db: Session = Depends(get_db)):
+def register(
+    payload: UserRegister,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
+):
+    # Anyone can sign up as a student. Instructor and registrar accounts can only be
+    # created by a logged-in registrar, so nobody can promote themselves.
+    if payload.role != RoleEnum.student and (
+        current_user is None or current_user.role != RoleEnum.registrar
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Only a registrar can create instructor or registrar accounts",
+        )
+
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 

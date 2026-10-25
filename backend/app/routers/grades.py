@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
-    AuditLog, Course, Enrollment, EnrollmentStatus, Instructor, RoleEnum,
-    Section, Student, User,
+    AuditLog, Course, Enrollment, EnrollmentStatus, Instructor, Notification,
+    RoleEnum, Section, Student, User,
 )
 from app.schemas import GradeOut, GradeUpdate, TranscriptCourse, TranscriptResponse
 from app.auth import require_role
@@ -77,6 +77,13 @@ def record_grade(
     student = db.query(Student).filter(Student.id == enrollment.student_id).first()
     gpa = _gpa(_graded_courses(db, student.id))
     student.gpa = Decimal(str(gpa))
+
+    course = db.query(Course).filter(Course.id == section.course_id).first()
+    db.add(Notification(
+        user_id=student.user_id,
+        kind="grade_posted",
+        message=f"Your grade for {course.code} {course.title} ({section.term}) has been posted: {payload.grade}.",
+    ))
 
     db.add(AuditLog(
         user_id=current_user.id, action="grade", table_name="enrollments",

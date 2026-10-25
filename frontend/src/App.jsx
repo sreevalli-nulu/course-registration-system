@@ -18,6 +18,7 @@ import Dashboard from "./pages/Dashboard";
 import CourseDetails from "./pages/CourseDetails";
 import Schedule from "./pages/Schedule";
 import Transcript from "./pages/Transcript";
+import Notifications from "./pages/Notifications";
 
 function MainLayout() {
   return (
@@ -42,6 +43,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/courses" element={<Courses />} />
               <Route path="/courses/:courseId" element={<CourseDetails />} />
+              <Route path="/notifications" element={<Notifications />} />
 
               <Route element={<ProtectedRoute roles={["student"]} />}>
                 <Route path="/schedule" element={<Schedule />} />

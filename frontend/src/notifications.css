@@ -1,0 +1,121 @@
+.navbar-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  color: #3945a9;
+  text-decoration: none;
+  font-size: 1.15rem;
+}
+
+.navbar-bell:hover,
+.navbar-bell.active {
+  background: #eef0ff;
+}
+
+.navbar-bell-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #e0334c;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.notifications-page {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 32px 20px 60px;
+}
+
+.notifications-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.notifications-header h1 {
+  margin: 0 0 4px;
+}
+
+.notifications-header p {
+  margin: 0;
+  color: #5b6178;
+}
+
+.notifications-header button {
+  padding: 9px 14px;
+  border: 1px solid #d6d9e6;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3945a9;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notifications-header button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notification-item {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid #e8eaf1;
+  border-radius: 11px;
+  background: #ffffff;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: default;
+}
+
+.notification-item.unread {
+  border-color: #c9ceff;
+  background: #f5f6ff;
+  cursor: pointer;
+}
+
+.notification-dot {
+  flex: 0 0 10px;
+  width: 10px;
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.notification-item.unread .notification-dot {
+  background: #e0334c;
+}
+
+.notification-body p {
+  margin: 0 0 4px;
+}
+
+.notification-item.unread .notification-body p {
+  font-weight: 600;
+}
+
+.notification-body small {
+  color: #7a8097;
+}

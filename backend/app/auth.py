@@ -17,6 +17,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# Same scheme, but a missing token is allowed (used by endpoints that are public
+# for some callers and restricted for others, e.g. /auth/register).
+oauth2_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -52,6 +55,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+
+def get_optional_user(
+    token: Optional[str] = Depends(oauth2_optional), db: Session = Depends(get_db)
+) -> Optional[User]:
+    """Returns the logged-in user, or None when there is no (valid) token."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+    except JWTError:
+        return None
+    if user_id is None:
+        return None
+    return db.query(User).filter(User.id == int(user_id)).first()
 
 
 def require_role(*allowed_roles: RoleEnum):

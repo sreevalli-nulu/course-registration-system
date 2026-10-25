@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import (
     Section, Enrollment, EnrollmentStatus, Waitlist, Student,
-    AuditLog, RoleEnum, Course, User,
+    AuditLog, RoleEnum, Course, User, Notification,
 )
 from app.schemas import EnrollmentCreate, EnrollmentResponse, DropResponse
 from app.auth import require_role
@@ -91,6 +91,19 @@ def promote_from_waitlist(db: Session, section: Section) -> list:
             db.add(row)
 
         promoted_ids.append(next_in_line.student_id)
+
+        # Tell the student: there is no other way for them to know a seat opened up.
+        promoted_student = db.query(Student).filter(Student.id == next_in_line.student_id).first()
+        course = db.query(Course).filter(Course.id == section.course_id).first()
+        if promoted_student and course:
+            db.add(Notification(
+                user_id=promoted_student.user_id,
+                kind="waitlist_promoted",
+                message=(
+                    f"A seat opened up and you have been enrolled in {course.code} "
+                    f"{course.title} (Section {section.section_number}, {section.term})."
+                ),
+            ))
         db.delete(next_in_line)
         db.flush()
         db.add(AuditLog(

@@ -1,7 +1,7 @@
 ﻿import enum
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, Numeric, ForeignKey, DateTime,
+    Column, Integer, String, Text, Numeric, ForeignKey, DateTime, Boolean, false,
     Enum as SAEnum, UniqueConstraint, CheckConstraint, func, text
 )
 from sqlalchemy.orm import relationship
@@ -200,3 +200,15 @@ class EnrollmentHistory(Base):
     new_grade = Column(String(2), nullable=True)
     changed_at = Column(DateTime, server_default=func.now(), nullable=False)
     changed_by = Column(String(100), server_default=text("current_user"), nullable=False)
+
+
+class Notification(Base):
+    """In-app message for a user, e.g. 'you were moved off the waitlist'."""
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    kind = Column(String(30), nullable=False)  # waitlist_promoted, grade_posted
+    message = Column(Text, nullable=False)
+    is_read = Column(Boolean, nullable=False, default=False, server_default=false())
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)

@@ -249,3 +249,20 @@ class InstructorSectionOut(BaseModel):
     capacity: int
     seats_taken: int
     waitlist_count: int
+
+
+# ---------- Notifications ----------
+
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: str
+    message: str
+    is_read: bool
+    created_at: datetime
+
+
+class NotificationList(BaseModel):
+    unread_count: int
+    notifications: List[NotificationOut]

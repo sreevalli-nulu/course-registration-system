@@ -10,9 +10,7 @@ function Register() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("student");
   const [studentNumber, setStudentNumber] = useState("");
-  const [department, setDepartment] = useState("");
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -28,9 +26,8 @@ function Register() {
         email,
         password,
         full_name: fullName,
-        role,
-        student_number: role === "student" ? studentNumber : null,
-        department: role === "instructor" ? department : null,
+        role: "student",
+        student_number: studentNumber,
       };
 
       await registerUser(userData);
@@ -107,41 +104,15 @@ function Register() {
           </div>
 
           <div className="form-group">
-            <label>Role</label>
-            <select
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-            >
-              <option value="student">Student</option>
-              <option value="instructor">Instructor</option>
-              <option value="registrar">Registrar</option>
-            </select>
+            <label>Student Number</label>
+            <input
+              type="text"
+              value={studentNumber}
+              onChange={(event) => setStudentNumber(event.target.value)}
+              placeholder="Enter your student number"
+              required
+            />
           </div>
-
-          {role === "student" && (
-            <div className="form-group">
-              <label>Student Number</label>
-              <input
-                type="text"
-                value={studentNumber}
-                onChange={(event) => setStudentNumber(event.target.value)}
-                placeholder="Enter your student number"
-                required
-              />
-            </div>
-          )}
-
-          {role === "instructor" && (
-            <div className="form-group">
-              <label>Department</label>
-              <input
-                type="text"
-                value={department}
-                onChange={(event) => setDepartment(event.target.value)}
-                placeholder="Enter your department"
-              />
-            </div>
-          )}
 
           {error && <p className="error-message">{error}</p>}
 
