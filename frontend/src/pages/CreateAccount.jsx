@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import api from "../services/api";
 import { errorText } from "../utils/format";
 import "../staff.css";
@@ -9,7 +9,55 @@ function CreateAccount() {
   const [form, setForm] = useState(EMPTY);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState(null);
-  const [created, setCreated] = useState([]);
+  const [instructors, setInstructors] = useState({ loaded: false, list: [], error: "" });
+  const [reloadKey, setReloadKey] = useState(0);
+  const [removingId, setRemovingId] = useState(null);
+  const [removeMessage, setRemoveMessage] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const load = async () => {
+      try {
+        const response = await api.get("/instructors");
+        if (!cancelled) setInstructors({ loaded: true, list: response.data, error: "" });
+      } catch (err) {
+        if (!cancelled) {
+          setInstructors({
+            loaded: true,
+            list: [],
+            error: errorText(err, "Unable to load instructors."),
+          });
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey]);
+
+  const handleRemove = async (instructor) => {
+    const confirmed = window.confirm(
+      `Remove ${instructor.full_name} (${instructor.email})? This deletes the account.`
+    );
+    if (!confirmed) return;
+
+    setRemovingId(instructor.id);
+    setRemoveMessage(null);
+
+    try {
+      await api.delete(`/instructors/${instructor.id}`);
+      setRemoveMessage({ type: "success", text: `Removed ${instructor.full_name}.` });
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setRemoveMessage({ type: "error", text: errorText(err, "Unable to remove this instructor.") });
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   const setField = (field) => (event) =>
     setForm((previous) => ({ ...previous, [field]: event.target.value }));
@@ -38,12 +86,12 @@ function CreateAccount() {
 
       const response = await api.post("/auth/register", payload);
 
-      setCreated((previous) => [response.data, ...previous]);
       setMessage({
         type: "success",
         text: `Created ${form.role} account for ${response.data.full_name}.`,
       });
       setForm({ ...EMPTY, role: form.role });
+      setReloadKey((key) => key + 1);
     } catch (err) {
       setMessage({ type: "error", text: errorText(err, "Unable to create the account.") });
     } finally {
@@ -145,36 +193,70 @@ function CreateAccount() {
         </div>
       </form>
 
-      {created.length > 0 && (
-        <section className="staff-card">
-          <h2>Created in this session</h2>
-          <p className="staff-sub">
-            New instructors can now be assigned to sections from Manage sections.
-          </p>
+      <section className="staff-card">
+        <h2>Instructors</h2>
+        <p className="staff-sub">
+          An instructor can be removed only if they teach no sections and have never posted a
+          grade. Otherwise, unassign their sections in Manage sections first.
+        </p>
+
+        {removeMessage && (
+          <div
+            className={`staff-notice ${removeMessage.type}`}
+            role={removeMessage.type === "error" ? "alert" : "status"}
+          >
+            {removeMessage.text}
+          </div>
+        )}
+
+        {instructors.error ? (
+          <div className="staff-notice error" role="alert">
+            {instructors.error}
+          </div>
+        ) : !instructors.loaded ? (
+          <p>Loading instructors...</p>
+        ) : instructors.list.length === 0 ? (
+          <div className="staff-empty">There are no instructors yet.</div>
+        ) : (
           <div className="staff-table-wrap">
             <table className="staff-table">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
-                  <th>Role</th>
+                  <th>Department</th>
+                  <th>Sections</th>
+                  <th className="right">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {created.map((account) => (
-                  <tr key={account.id}>
-                    <td>{account.full_name}</td>
-                    <td>{account.email}</td>
+                {instructors.list.map((instructor) => (
+                  <tr key={instructor.id}>
+                    <td>{instructor.full_name}</td>
+                    <td>{instructor.email}</td>
+                    <td>{instructor.department || "—"}</td>
                     <td>
-                      <span className="staff-badge">{account.role}</span>
+                      <span className={`staff-badge ${instructor.section_count ? "" : "muted"}`}>
+                        {instructor.section_count}
+                      </span>
+                    </td>
+                    <td className="right">
+                      <button
+                        type="button"
+                        className="staff-btn small secondary"
+                        disabled={removingId !== null}
+                        onClick={() => handleRemove(instructor)}
+                      >
+                        {removingId === instructor.id ? "Removing..." : "Remove"}
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </section>
-      )}
+        )}
+      </section>
     </main>
   );
 }

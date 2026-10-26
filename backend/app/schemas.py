@@ -242,6 +242,7 @@ class InstructorOut(BaseModel):
     full_name: str
     email: EmailStr
     department: Optional[str] = None
+    section_count: int = 0
 
 
 class InstructorSectionOut(BaseModel):

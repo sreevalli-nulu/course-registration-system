@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
-    Course, Enrollment, EnrollmentStatus, Instructor, RoleEnum, Section,
+    AuditLog, Course, Enrollment, EnrollmentStatus, Instructor, Notification, RoleEnum, Section,
     Student, User, Waitlist, SEAT_HOLDING_STATUSES,
 )
 from app.schemas import InstructorOut, InstructorSectionOut, RosterEntryOut, RosterOut
@@ -111,7 +111,71 @@ def list_instructors(
         .order_by(User.full_name)
         .all()
     )
+    counts = dict(
+        db.query(Section.instructor_id, func.count(Section.id))
+        .filter(Section.instructor_id.isnot(None))
+        .group_by(Section.instructor_id)
+        .all()
+    )
     return [
-        InstructorOut(id=i.id, full_name=u.full_name, email=u.email, department=i.department)
+        InstructorOut(
+            id=i.id, full_name=u.full_name, email=u.email, department=i.department,
+            section_count=counts.get(i.id, 0),
+        )
         for i, u in rows
     ]
+
+
+@router.delete("/instructors/{instructor_id}")
+def remove_instructor(
+    instructor_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(RoleEnum.registrar)),
+):
+    """Delete an instructor account that has never taught or graded anything."""
+    instructor = db.query(Instructor).filter(Instructor.id == instructor_id).first()
+    if not instructor:
+        raise HTTPException(status_code=404, detail="Instructor not found")
+    user = db.query(User).filter(User.id == instructor.user_id).first()
+
+    taught = (
+        db.query(Section, Course)
+        .join(Course, Section.course_id == Course.id)
+        .filter(Section.instructor_id == instructor.id)
+        .order_by(Section.term, Course.code)
+        .all()
+    )
+    if taught:
+        shown = ", ".join(f"{c.code} {s.term}" for s, c in taught[:4])
+        more = f" and {len(taught) - 4} more" if len(taught) > 4 else ""
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{user.full_name} is assigned to {len(taught)} section(s) ({shown}{more}). "
+                "Reassign or unassign them in Sections first."
+            ),
+        )
+
+    has_history = (
+        db.query(func.count(AuditLog.id)).filter(AuditLog.user_id == user.id).scalar()
+    ) or 0
+    if has_history:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{user.full_name} has activity in the audit log (for example posted grades), "
+                "so the account cannot be deleted. Unassign their sections instead."
+            ),
+        )
+
+    email, name = user.email, user.full_name
+    db.query(Notification).filter(Notification.user_id == user.id).delete()
+    db.delete(instructor)
+    db.flush()
+    db.delete(user)
+    db.add(AuditLog(
+        user_id=current_user.id, action="instructor_delete", table_name="instructors",
+        record_id=instructor_id, details=f"removed {name} <{email}>",
+    ))
+    db.commit()
+    return {"status": "removed", "instructor_id": instructor_id}
